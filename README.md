@@ -1,41 +1,40 @@
 # AI Task Manager 🚀
 
-An AI-native task management system and appointment booking assistant built with natural language at its core. This project leverages the **OpenAI Agents SDK** and the **Model Context Protocol (MCP)** to create a seamless, intelligent coordination experience.
+An AI-native task management system that helps users manage tasks, reminders, and appointment-style workflows through natural conversation.
 
-## 🌟 Vision
-The AI Task Manager is designed to be more than just a list. It's a personal coordinator that understands intent, manages schedules, and interacts with external tools (like Google Sheets and Notification services) to simplify your daily life.
+This project is built on the principles of **agentic orchestration**, where specialized AI agents coordinate through strict boundaries to deliver a reliable, modular user experience.
 
-## ✨ Core Features
-- **Natural Language Orchestration:** Add, update, or find tasks simply by talking to the agent.
-- **Intelligent Appointment Booking:** A specialized agent that handles bookings and records them directly to Google Sheets.
-- **Automated Notifications:** Smart reminders for tasks with deadlines, handled via a dedicated FastAPI service.
-- **AI-Native Architecture:** Built from the ground up using specialized agents rather than a monolithic logic block.
+## 🌟 Product Direction
+The system provides a clear, reliable, and explicit conversational interface. We prioritize deterministic behavior: time, date, identity, and destructive actions are never guessed; they are explicitly clarified by the AI before execution.
 
-## 🏗️ Technical Architecture
-The system is divided into four distinct layers:
+## 🏗️ Architecture & Boundaries
+The system is divided into clear operational domains:
 
-1.  **Orchestration (OpenAI Agents SDK):** Manages conversation flow and agent handoffs.
-2.  **Tools (MCP Server):** A Python-based server implementing the Model Context Protocol to provide standardized access to task data.
-3.  **Services:** FastAPI-powered notifications and Google Sheets integration.
-4.  **Interface:** A modern Next.js 16 frontend with secure session management via Better Auth.
+1.  **Tasks Manager Agent:** The primary user-facing orchestrator. Owns intent parsing, clarification, routing, and final user confirmation.
+2.  **Tasks MCP Server:** The exclusive backend service for all task mutations. Agents do not mutate the database directly; they communicate via the Model Context Protocol (MCP).
+3.  **Appointment Booking Agent:** A specialized agent routed to for booking workflows. It handles scheduling but **never** mutates tasks directly.
+4.  **Notifications API:** A standalone service triggered only after valid task mutations succeed.
 
-## 🛠️ Tech Stack
-- **Language:** Python 3.12+ (Backend), TypeScript (Frontend)
+## 🛠️ Tech Stack & Defaults
+- **Language:** Python 3.12+ (Backend/Agents), TypeScript (Frontend)
+- **Package Manager:** `uv` (Exclusive tool for dependency resolution and environments)
 - **AI Framework:** OpenAI Agents SDK
-- **Protocol:** Model Context Protocol (MCP)
-- **Web Framework:** FastAPI (Services), Next.js 16 (UI)
-- **Auth:** Better Auth
-- **Infrastructure:** Designed for Render/Railway deployment
+- **Protocol:** Model Context Protocol (MCP) (via `FastMCP`)
+- **Infrastructure:** Kubernetes-first (Containers via `ghcr.io`, stateless design)
 
 ## 📜 The Constitution
-This project follows a strict set of principles defined in [AGENTS.md](./AGENTS.md):
-- **Test-Driven Development (TDD):** Red, Green, Refactor.
-- **KISS & YAGNI:** Simplicity and focus over premature complexity.
-- **Statelessness:** Cloud-native and horizontally scalable.
+Every design and implementation decision in this repository is governed by our project constitution. 
+
+👉 **[Read AGENTS.md](./AGENTS.md)** before contributing. 
+
+Key principles include:
+- **Test-First Default:** Write failing tests covering expected behavior before implementing.
+- **Docs-First Development:** Verify SDK/Framework behavior against official docs. Outdated assumptions are bugs.
+- **Kubernetes From The Start:** All services must be stateless, configurable via environment variables, and equipped with health probes.
+- **Always Verify:** Plausible output is not verified output. Prove it works empirically.
 
 ## 🚀 Getting Started (Coming Soon)
-*Development is in progress. The initial project structure and "Constitution" have been established.*
+*Development is currently in the foundational Planning and Research phase.*
 
 ---
 **Maintained by:** [AbdulQadeerKhan555](https://github.com/AbdulQadeerKhan555)
-
