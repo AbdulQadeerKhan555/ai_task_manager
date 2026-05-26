@@ -44,6 +44,7 @@ Our system is a symphony of specialized experts working in concert:
 ---
 
 ## 5. Implementation Standards
+- **Tech Stack Mandates:** Use **Python 3.12+** for all backend logic and **uv** as the primary package manager for performance and reliability.
 - **OpenAI Agents SDK:** Utilize `Agent`, `@tool`, and `Handoff`. Use `Runner.run()` (async) for production readiness.
 - **FastMCP:** Build all MCP servers using the `FastMCP` framework for rapid, compliant tool development.
 - **Self-Evolving Documentation:** Every correction or lesson learned must be encoded back into `AGENTS.md` or `GEMINI.md` to prevent regressions.
