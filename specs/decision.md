@@ -27,28 +27,30 @@ We will use **Streamable HTTP** as the transport layer, specifically in a **Stat
 
 ## 2. Tool Naming Convention
 *   **Decision:** All tools will be prefixed with `tasks_`.
-*   **Example:** `tasks_create`, `tasks_list`.
+*   **Example:** `tasks_add_and_schedule`, `tasks_get_agenda`.
 
 ---
 
 ## 3. Tool Granularity
-*   **Decision:** Prioritize **Atomic Tools** (CRUD operations) first for maximum agent flexibility.
+*   **Decision:** Prioritize **Agentic Workflow Tools** over atomic CRUD.
+*   **Rationale:** Surfacing raw database operations to an agent is inefficient. We design tools that encapsulate end-to-end human intents (e.g., Capture, Review, Action) in a single call to minimize token usage and latency.
 
 ---
 
 ## 4. Context Management
-*   **Decision:** Mandatory pagination and filtering to prevent context window overflow.
+*   **Decision:** Intent-based summarization (e.g., `get_agenda`) over raw list pagination.
+*   **Rationale:** The server should handle filtering and sorting to return only high-signal information tailored for an LLM's context window.
 
 ---
 
 ## 5. Safety
-*   **Decision:** Use MCP `destructiveHint` for task deletion to trigger user confirmation.
+*   **Decision:** Use MCP `destructiveHint` for task deletion or major state changes to trigger user confirmation.
 
 ---
 
 # Task Management Tools & Data Model
 
-This document defines the core data structure and the MCP tool interfaces for the Tasks Management System.
+This document defines the core data structure and the intent-based MCP tool interfaces for the Tasks Management System.
 
 ---
 
@@ -63,41 +65,37 @@ Each task will have the following properties:
 | `description` | `string` | Detailed notes (Optional). |
 | `status` | `enum` | `todo`, `in_progress`, `completed`. |
 | `due_at` | `string` | ISO 8601 timestamp for deadline (Optional). |
+| `remind_at` | `string` | ISO 8601 timestamp for notification (Optional). |
 | `created_at` | `string` | ISO 8601 timestamp of creation. |
 | `updated_at` | `string` | ISO 8601 timestamp of last update. |
 
 ---
 
-## 2. Tool Definitions
+## 2. Intent-Based Tool Definitions
 
-### `tasks_create`
-Adds a new task to the system.
-*   **Input:** `title` (required), `description` (optional), `due_at` (optional).
+### `tasks_add_and_schedule`
+Captures a new task and automatically schedules a reminder if a time is provided.
+*   **Input:** `title` (required), `description` (optional), `remind_at` (optional).
+*   **Logic:** Saves the task to the store and immediately registers a notification via the Notifications Service.
 *   **Returns:** The newly created `Task` object.
 
-### `tasks_list`
-Retrieves a list of tasks with filtering.
-*   **Input:** 
-    *   `status`: Filter by status (optional).
-    *   `limit`: Max tasks to return (default: 50).
-    *   `offset`: Number of tasks to skip (for pagination).
-*   **Returns:** An array of `Task` objects.
+### `tasks_get_agenda`
+Retrieves a curated summary of tasks for immediate review.
+*   **Input:** `date` (optional, defaults to today).
+*   **Logic:** Returns a filtered list containing "Overdue" tasks and tasks "Due Today," sorted by priority/time.
+*   **Returns:** A high-signal summary string or a list of `Task` objects.
 
-### `tasks_get`
-Retrieves a single task by its ID.
+### `tasks_mark_done`
+Completes a task and cleans up associated resources.
 *   **Input:** `id` (required).
-*   **Returns:** The `Task` object or an error if not found.
+*   **Logic:** Updates status to `completed` and automatically cancels any pending notifications for this task.
+*   **Returns:** Success confirmation.
 
-### `tasks_update`
-Modifies an existing task.
-*   **Input:** `id` (required), and any of `title`, `description`, `status`, `due_at`.
+### `tasks_reschedule_or_edit`
+Modifies a task and re-syncs any associated schedules.
+*   **Input:** `id` (required), plus any of `title`, `description`, `remind_at`.
+*   **Logic:** Updates the record and re-calculates/updates the notification trigger.
 *   **Returns:** The updated `Task` object.
-
-### `tasks_delete`
-Removes a task from the system.
-*   **Input:** `id` (required).
-*   **Annotations:** `destructiveHint: true`.
-*   **Returns:** A success confirmation message.
 
 ---
 
