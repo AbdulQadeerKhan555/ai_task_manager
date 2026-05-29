@@ -11,6 +11,7 @@ This section defines the precise technical schemas and internal logic for the Ta
   "type": "object",
   "properties": {
     "id": { "type": "string", "format": "uuid" },
+    "user_id": { "type": "string", "description": "The owner of the task" },
     "title": { "type": "string" },
     "description": { "type": "string" },
     "status": { "type": "string", "enum": ["todo", "in_progress", "completed"] },
@@ -19,7 +20,7 @@ This section defines the precise technical schemas and internal logic for the Ta
     "created_at": { "type": "string", "format": "date-time" },
     "updated_at": { "type": "string", "format": "date-time" }
   },
-  "required": ["id", "title", "status", "created_at", "updated_at"]
+  "required": ["id", "user_id", "title", "status", "created_at", "updated_at"]
 }
 ```
 
@@ -36,16 +37,18 @@ This section defines the precise technical schemas and internal logic for the Ta
       "properties": {
         "title": { "type": "string", "description": "The task summary" },
         "description": { "type": "string", "description": "Optional details" },
-        "remind_at": { "type": "string", "format": "date-time", "description": "Optional reminder time (ISO 8601)" }
+        "remind_at": { "type": "string", "format": "date-time", "description": "Optional reminder time (ISO 8601)" },
+        "user_id": { "type": "string", "description": "Optional user ID (defaults to 'mock_user_123')" }
       },
       "required": ["title"]
     }
     ```
 *   **Internal Logic:** 
     1. Generate UUID.
-    2. Set `status` to `todo`.
-    3. If `remind_at` is provided, trigger the Notification Service.
-    4. Save to `tasks_db`.
+    2. Set `user_id` to provided value or **"mock_user_123"** if missing.
+    3. Set `status` to `todo`.
+    4. If `remind_at` is provided, trigger the Notification Service.
+    5. Save to `tasks_db`.
 
 ### `tasks_review`
 **Intent:** Get a high-signal overview of tasks.
@@ -54,14 +57,16 @@ This section defines the precise technical schemas and internal logic for the Ta
     {
       "type": "object",
       "properties": {
-        "query": { "type": "string", "enum": ["today", "overdue", "all"], "default": "today" }
+        "query": { "type": "string", "enum": ["today", "overdue", "all"], "default": "today" },
+        "user_id": { "type": "string", "description": "Optional user ID (defaults to 'mock_user_123')" }
       }
     }
     ```
 *   **Internal Logic:** 
-    1. If `today`: Filter tasks where `status != completed` AND (`due_at` or `remind_at` is today).
-    2. If `overdue`: Filter tasks where `status != completed` AND (`due_at` < now).
-    3. Sort by `due_at` ascending.
+    1. Filter by `user_id` (provided or default).
+    2. If `today`: Filter tasks where `status != completed` AND (`due_at` or `remind_at` is today).
+    3. If `overdue`: Filter tasks where `status != completed` AND (`due_at` < now).
+    4. Sort by `due_at` ascending.
 
 ### `tasks_modify`
 **Intent:** Update task details or reschedule.
