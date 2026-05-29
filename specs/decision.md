@@ -48,57 +48,120 @@ We will use **Streamable HTTP** as the transport layer, specifically in a **Stat
 
 ---
 
-# Task Management Tools & Data Model
+# Technical Specification: 5-Intent Task Tools
 
-This document defines the core data structure and the intent-based MCP tool interfaces for the Tasks Management System.
-
----
-
-## 1. The Task Data Model
-
-| Property | Type | Description |
-| :--- | :--- | :--- |
-| `id` | `string` | Unique identifier (UUID). |
-| `title` | `string` | Short summary of the task (Required). |
-| `description` | `string` | Detailed notes (Optional). |
-| `status` | `enum` | `todo`, `in_progress`, `completed`. |
-| `due_at` | `string` | ISO 8601 timestamp for deadline (Optional). |
-| `remind_at` | `string` | ISO 8601 timestamp for notification (Optional). |
-| `created_at` | `string` | ISO 8601 timestamp of creation. |
-| `updated_at` | `string` | ISO 8601 timestamp of last update. |
+This section defines the precise technical schemas and internal logic for the Tasks MCP Server.
 
 ---
 
-## 2. The 5-Intent Tool Definitions
+## 1. The Task Schema (Pydantic Model)
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "status": { "type": "string", "enum": ["todo", "in_progress", "completed"] },
+    "due_at": { "type": "string", "format": "date-time" },
+    "remind_at": { "type": "string", "format": "date-time" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "required": ["id", "title", "status", "created_at", "updated_at"]
+}
+```
+
+---
+
+## 2. Tool Definitions & Logic
 
 ### `tasks_capture`
-**Intent:** "Remind me to call mom tomorrow at 5"
-*   **Input:** `title` (required), `description` (optional), `remind_at` (optional).
-*   **Logic:** Saves the task and schedules a notification in one step.
+**Intent:** Capture a new task and optional schedule.
+*   **Input Schema:**
+    ```json
+    {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "The task summary" },
+        "description": { "type": "string", "description": "Optional details" },
+        "remind_at": { "type": "string", "format": "date-time", "description": "Optional reminder time (ISO 8601)" }
+      },
+      "required": ["title"]
+    }
+    ```
+*   **Internal Logic:** 
+    1. Generate UUID.
+    2. Set `status` to `todo`.
+    3. If `remind_at` is provided, trigger the Notification Service.
+    4. Save to `tasks_db`.
 
 ### `tasks_review`
-**Intent:** "What's on my plate today?" / "What's overdue?"
-*   **Input:** `query` (optional - e.g., "today", "overdue", "all").
-*   **Logic:** Returns a curated, LLM-friendly summary of relevant tasks.
+**Intent:** Get a high-signal overview of tasks.
+*   **Input Schema:**
+    ```json
+    {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "enum": ["today", "overdue", "all"], "default": "today" }
+      }
+    }
+    ```
+*   **Internal Logic:** 
+    1. If `today`: Filter tasks where `status != completed` AND (`due_at` or `remind_at` is today).
+    2. If `overdue`: Filter tasks where `status != completed` AND (`due_at` < now).
+    3. Sort by `due_at` ascending.
 
 ### `tasks_modify`
-**Intent:** "Move the dentist to Wednesday and rename it"
-*   **Input:** `id` (required), `title` (optional), `due_at` (optional), `remind_at` (optional).
-*   **Logic:** Updates the record and re-syncs any associated notification triggers.
+**Intent:** Update task details or reschedule.
+*   **Input Schema:**
+    ```json
+    {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "due_at": { "type": "string", "format": "date-time" },
+        "remind_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id"]
+    }
+    ```
+*   **Internal Logic:** 
+    1. Find task by ID (Return 404 if missing).
+    2. Patch only provided fields.
+    3. If `remind_at` changed, cancel old notification and schedule new one.
+    4. Update `updated_at`.
 
 ### `tasks_resolve`
-**Intent:** "I finished the report" / "Skip the gym"
-*   **Input:** `id` (required), `resolution` (default: "completed").
-*   **Logic:** Marks the task done and cancels any pending notifications.
+**Intent:** Complete or skip a task.
+*   **Input Schema:**
+    ```json
+    {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "resolution": { "type": "string", "enum": ["completed", "skipped"], "default": "completed" }
+      },
+      "required": ["id"]
+    }
+    ```
+*   **Internal Logic:** 
+    1. Update `status` to `completed` (or skip).
+    2. **Crucial:** Cancel any pending notifications associated with this task ID.
 
 ### `tasks_remove`
-**Intent:** "Delete that grocery task - I don't need it"
-*   **Input:** `id` (required).
-*   **Annotations:** `destructiveHint: true`.
-*   **Logic:** Permanently deletes the task and its schedule.
+**Intent:** Delete a task permanently.
+*   **Input Schema:** `{"id": {"type": "string", "format": "uuid"}}`
+*   **Internal Logic:** 
+    1. Remove from `tasks_db`.
+    2. Cancel all pending notifications.
+*   **Annotation:** `destructiveHint: true`.
 
 ---
 
 ## 3. Storage Strategy (v1)
-*   **Type:** In-memory (Global Python dictionary).
-*   **Continuity:** Reset on server restart (acceptable for initial development).
+*   **Type:** In-memory (Global Python dictionary `tasks_db: dict[str, Task]`).
+*   **Thread Safety:** Use `asyncio.Lock()` for all write operations.
