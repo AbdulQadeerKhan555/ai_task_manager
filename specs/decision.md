@@ -27,24 +27,24 @@ We will use **Streamable HTTP** as the transport layer, specifically in a **Stat
 
 ## 2. Tool Naming Convention
 *   **Decision:** All tools will be prefixed with `tasks_`.
-*   **Example:** `tasks_add_and_schedule`, `tasks_get_agenda`.
+*   **Example:** `tasks_capture`, `tasks_review`.
 
 ---
 
-## 3. Tool Granularity
-*   **Decision:** Prioritize **Agentic Workflow Tools** over atomic CRUD.
-*   **Rationale:** Surfacing raw database operations to an agent is inefficient. We design tools that encapsulate end-to-end human intents (e.g., Capture, Review, Action) in a single call to minimize token usage and latency.
+## 3. Tool Granularity: The 5-Intent Model
+*   **Decision:** Model the unit of user work, not the unit of database mutation.
+*   **Rationale:** We use five intent-based tools that cover ~everything a human actually does with a task manager. This minimizes token usage and failure points by finishing a coherent piece of work in one call.
 
 ---
 
 ## 4. Context Management
-*   **Decision:** Intent-based summarization (e.g., `get_agenda`) over raw list pagination.
-*   **Rationale:** The server should handle filtering and sorting to return only high-signal information tailored for an LLM's context window.
+*   **Decision:** Intent-based summarization (via `tasks_review`) over raw list pagination.
+*   **Rationale:** The server filters and sorts data to return high-signal summaries (e.g., "Overdue", "Today"), keeping the agent's context window lean.
 
 ---
 
 ## 5. Safety
-*   **Decision:** Use MCP `destructiveHint` for task deletion or major state changes to trigger user confirmation.
+*   **Decision:** Use MCP `destructiveHint` for `tasks_remove` to trigger user confirmation.
 
 ---
 
@@ -55,8 +55,6 @@ This document defines the core data structure and the intent-based MCP tool inte
 ---
 
 ## 1. The Task Data Model
-
-Each task will have the following properties:
 
 | Property | Type | Description |
 | :--- | :--- | :--- |
@@ -71,34 +69,36 @@ Each task will have the following properties:
 
 ---
 
-## 2. Intent-Based Tool Definitions
+## 2. The 5-Intent Tool Definitions
 
-### `tasks_add_and_schedule`
-Captures a new task and automatically schedules a reminder if a time is provided.
+### `tasks_capture`
+**Intent:** "Remind me to call mom tomorrow at 5"
 *   **Input:** `title` (required), `description` (optional), `remind_at` (optional).
-*   **Logic:** Saves the task to the store and immediately registers a notification via the Notifications Service.
-*   **Returns:** The newly created `Task` object.
+*   **Logic:** Saves the task and schedules a notification in one step.
 
-### `tasks_get_agenda`
-Retrieves a curated summary of tasks for immediate review.
-*   **Input:** `date` (optional, defaults to today).
-*   **Logic:** Returns a filtered list containing "Overdue" tasks and tasks "Due Today," sorted by priority/time.
-*   **Returns:** A high-signal summary string or a list of `Task` objects.
+### `tasks_review`
+**Intent:** "What's on my plate today?" / "What's overdue?"
+*   **Input:** `query` (optional - e.g., "today", "overdue", "all").
+*   **Logic:** Returns a curated, LLM-friendly summary of relevant tasks.
 
-### `tasks_mark_done`
-Completes a task and cleans up associated resources.
+### `tasks_modify`
+**Intent:** "Move the dentist to Wednesday and rename it"
+*   **Input:** `id` (required), `title` (optional), `due_at` (optional), `remind_at` (optional).
+*   **Logic:** Updates the record and re-syncs any associated notification triggers.
+
+### `tasks_resolve`
+**Intent:** "I finished the report" / "Skip the gym"
+*   **Input:** `id` (required), `resolution` (default: "completed").
+*   **Logic:** Marks the task done and cancels any pending notifications.
+
+### `tasks_remove`
+**Intent:** "Delete that grocery task - I don't need it"
 *   **Input:** `id` (required).
-*   **Logic:** Updates status to `completed` and automatically cancels any pending notifications for this task.
-*   **Returns:** Success confirmation.
-
-### `tasks_reschedule_or_edit`
-Modifies a task and re-syncs any associated schedules.
-*   **Input:** `id` (required), plus any of `title`, `description`, `remind_at`.
-*   **Logic:** Updates the record and re-calculates/updates the notification trigger.
-*   **Returns:** The updated `Task` object.
+*   **Annotations:** `destructiveHint: true`.
+*   **Logic:** Permanently deletes the task and its schedule.
 
 ---
 
 ## 3. Storage Strategy (v1)
 *   **Type:** In-memory (Global Python dictionary).
-*   **Continuity:** Since we are using **Stateless JSON**, the in-memory store will be reset on every server restart. This is acceptable for the initial development phase.
+*   **Continuity:** Reset on server restart (acceptable for initial development).
